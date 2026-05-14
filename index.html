@@ -8,6 +8,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
 <title>点菜系统</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root{--primary:#d4312c;--primary-dark:#b52824;--primary-light:#fff1f0;--bg:#f5f5f5;--card:#fff;--text:#1f2937;--text2:#6b7280;--text3:#9ca3af;--border:#e5e7eb;--success:#10b981;--warn:#f59e0b;--radius:12px;--shadow:0 1px 3px rgba(0,0,0,.08)}
@@ -398,8 +399,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 <div class="toast-container" id="toastContainer"></div>
 
 <script>
+// ============== SUPABASE ==============
+const SUPABASE_URL = 'https://jsumaziyrjpdyjcfrhvv.supabase.co'
+const SUPABASE_KEY = 'sb_publishable_juVmt6El75xGK4UbahV9Pg_9NeBaMwJ'
+let supabase
+
 // ============== DATA ==============
-const SK = 'order-app-data';
 const defaults = () => ({
   categories: ['热销','冷菜','热菜','素菜','炸物','主食','饮品','汤类','水果'],
   dishes: [
@@ -422,23 +427,48 @@ const defaults = () => ({
   nextOrderId: 1
 });
 
-function loadData(){
-  try{
-    const raw = localStorage.getItem(SK);
-    if(!raw) return saveData(defaults()),defaults();
-    const d = JSON.parse(raw);
-    // merge defaults for missing fields
-    const def = defaults();
-    for(const k of Object.keys(def)){
-      if(!(k in d)) d[k]=def[k];
-      if(k==='categories' && d.categories.length===0) d.categories=def.categories;
-    }
-    return d;
-  }catch(e){return defaults()}
-}
-function saveData(d){d=d||data;try{localStorage.setItem(SK,JSON.stringify(d))}catch(e){showToast('存储空间不足')}}
+let data = defaults();
+const CART_KEY = 'order-app-cart';
 
-let data = loadData();
+function loadCart(){
+  try{const r=localStorage.getItem(CART_KEY);if(r)data.cart=JSON.parse(r)}catch(e){}
+}
+function saveCart(){
+  try{localStorage.setItem(CART_KEY,JSON.stringify(data.cart))}catch(e){}
+}
+
+async function initData(){
+  supabase = window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY);
+  if(!supabase){data=defaults();loadCart();renderAll();return}
+  try{
+    const [dr,cr,orr] = await Promise.all([
+      supabase.from('dishes').select('*').order('id'),
+      supabase.from('categories').select('*').order('name'),
+      supabase.from('orders').select('*').order('id',{ascending:false})
+    ]);
+    if(dr.error) throw dr.error;
+    if(dr.data.length){
+      data.dishes = dr.data.map(d=>({...d,desc:d.description||''}));
+      data.categories = cr.data.map(c=>c.name);
+      data.orders = orr.data;
+      data.nextId = Math.max(...data.dishes.map(d=>d.id),0)+1;
+      data.nextOrderId = Math.max(...data.orders.map(o=>o.id),0)+1;
+    }else{
+      // First time - seed defaults into cloud
+      for(const n of data.categories) await supabase.from('categories').insert({name:n}).catch(()=>{});
+      for(const d of data.dishes) await supabase.from('dishes').insert({
+        id:d.id,name:d.name,price:d.price,category:d.category,
+        description:d.desc,image:d.image,available:d.available
+      }).catch(()=>{});
+    }
+  }catch(e){
+    showToast('云端连接失败，使用本地数据');
+    data = defaults();
+  }
+  loadCart();
+  renderAll();
+}
+function renderAll(){updateCartBadge();renderMenu();renderCart();renderOrders()}
 
 // ============== NAVIGATION ==============
 const pageNames = {menu:'菜单',cart:'购物车',orders:'订单',admin:'管理'};
@@ -457,27 +487,29 @@ function navigate(page){
 
 // ============== CATEGORY ==============
 function getCategories(){return data.categories}
-function addCategory(name){
+async function addCategory(name){
   name=name.trim();
   if(!name) return showToast('请输入分类名称');
   if(data.categories.includes(name)) return showToast('分类已存在');
   data.categories.push(name);
-  saveData();renderAdminCategories();populateCategorySelect();
+  await supabase?.from('categories').insert({name}).catch(()=>{});
   document.getElementById('catInput').value='';
+  renderAdminCategories();populateCategorySelect();
   showToast('分类已添加');
 }
-function removeCategory(name){
+async function removeCategory(name){
   const used = data.dishes.some(d=>d.category===name);
   if(used) return showToast('该分类下有菜品，无法删除');
   data.categories = data.categories.filter(c=>c!==name);
-  saveData();renderAdminCategories();populateCategorySelect();renderMenu();
+  await supabase?.from('categories').delete().eq('name',name).catch(()=>{});
+  renderAdminCategories();populateCategorySelect();renderMenu();
   showToast('分类已删除');
 }
 
 // ============== DISH CRUD ==============
 function getDishes(){return data.dishes}
 function getDish(id){return data.dishes.find(d=>d.id===id)}
-function saveDish(){
+async function saveDish(){
   const name = document.getElementById('dfName').value.trim();
   const price = parseFloat(document.getElementById('dfPrice').value);
   const category = document.getElementById('dfCategory').value;
@@ -491,16 +523,24 @@ function saveDish(){
   if(editing){
     const d = getDish(editing);
     if(d){d.name=name;d.price=price;d.category=category;d.desc=desc;d.image=image;d.available=available}
+    await supabase?.from('dishes').update({
+      name,price,category,description:desc,image,available
+    }).eq('id',editing).catch(()=>showToast('保存失败'));
   }else{
-    data.dishes.push({id:data.nextId++,name,price,category,desc,image,available});
+    const id = data.nextId++;
+    data.dishes.push({id,name,price,category,desc,image,available});
+    await supabase?.from('dishes').insert({
+      id,name,price,category,description:desc,image,available
+    }).catch(()=>showToast('保存失败'));
   }
-  saveData();cancelDishEdit();renderAdminDishes();renderMenu();
+  cancelDishEdit();renderAdminDishes();renderMenu();
   showToast(editing?'菜品已更新':'菜品已添加');
 }
-function deleteDish(id){
-  confirm('确定要删除这道菜吗？',()=>{
+async function deleteDish(id){
+  confirm('确定要删除这道菜吗？',async ()=>{
     data.dishes = data.dishes.filter(d=>d.id!==id);
-    saveData();renderAdminDishes();renderMenu();
+    await supabase?.from('dishes').delete().eq('id',id).catch(()=>{});
+    renderAdminDishes();renderMenu();
     showToast('已删除');
   });
 }
@@ -515,7 +555,6 @@ function editDish(id){
   document.getElementById('dfDesc').value = d.desc;
   document.getElementById('dfAvailable').className = 'toggle'+(d.available?' on':'');
   setDishImage(d.image);
-  document.getElementById('dishFormTitle').textContent = '编辑菜品';
   document.getElementById('btnFormCancel').classList.remove('hidden');
   document.getElementById('dishForm').scrollIntoView({behavior:'smooth'});
 }
@@ -594,16 +633,16 @@ function addToCart(dishId,qty){
   const item = data.cart.find(c=>c.dishId===dishId);
   if(item) item.qty+=qty;
   else data.cart.push({dishId,qty});
-  saveData();updateCartBadge();renderCart();showToast(`已加入购物车`);
+  saveCart();updateCartBadge();renderCart();showToast(`已加入购物车`);
 }
 function updateCartQty(dishId,delta){
   const item = data.cart.find(c=>c.dishId===dishId);
   if(!item) return;
   item.qty+=delta;
   if(item.qty<=0) data.cart = data.cart.filter(c=>c.dishId!==dishId);
-  saveData();updateCartBadge();renderCart();
+  saveCart();updateCartBadge();renderCart();
 }
-function clearCart(){data.cart=[];saveData();updateCartBadge();renderCart()}
+function clearCart(){data.cart=[];saveCart();updateCartBadge();renderCart()}
 function getCartCount(){return data.cart.reduce((s,c)=>s+c.qty,0)}
 function getCartTotal(){return data.cart.reduce((s,c)=>{const d=getDish(c.dishId);return s+(d?d.price*c.qty:0)},0)}
 function updateCartBadge(){
@@ -613,7 +652,7 @@ function updateCartBadge(){
 }
 
 // ============== ORDERS ==============
-function placeOrder(table,note){
+async function placeOrder(table,note){
   const items = data.cart.map(c=>{
     const d=getDish(c.dishId);
     return {dishId:c.dishId,name:d?d.name:'已删除',price:d?d.price:0,qty:c.qty};
@@ -623,20 +662,22 @@ function placeOrder(table,note){
     id:data.nextOrderId++,
     items,
     total,
-    table:table||'',
+    table_no:table||'',
     note:note||'',
     status:'active',
     time:new Date().toLocaleString('zh-CN')
   };
   data.orders.unshift(order);
   data.cart = [];
-  saveData();updateCartBadge();renderCart();renderOrders();renderAdminOrders();
+  saveCart();
+  await supabase?.from('orders').insert(order).catch(()=>showToast('订单保存失败'));
+  updateCartBadge();renderCart();renderOrders();renderAdminOrders();
   navigate('orders');
   showToast('下单成功！');
 }
-function completeOrder(id){
+async function completeOrder(id){
   const o = data.orders.find(o=>o.id===id);
-  if(o){o.status='done';saveData();renderOrders();renderAdminOrders();showToast('订单已完成')}
+  if(o){o.status='done';await supabase?.from('orders').update({status:'done'}).eq('id',id).catch(()=>{});renderOrders();renderAdminOrders();showToast('订单已完成')}
 }
 
 // ============== RENDER: MENU ==============
@@ -743,7 +784,7 @@ function renderOrders(){
           <span class="oc-time">${o.time}</span>
         </div>
         <div class="oc-items">${items}</div>
-        ${o.table?`<div style="font-size:12px;color:var(--text2);margin-bottom:6px">${o.table}${o.note?' | '+o.note:''}</div>`:''}
+        ${(o.table_no||o.table)?`<div style="font-size:12px;color:var(--text2);margin-bottom:6px">${o.table}${o.note?' | '+o.note:''}</div>`:''}
         <div class="oc-footer">
           <span class="oc-total">${o.total.toFixed(1)}</span>
           <span class="oc-status done">已完成</span>
@@ -761,7 +802,7 @@ function renderOrders(){
         <span class="oc-time">${o.time}</span>
       </div>
       <div class="oc-items">${items}</div>
-      ${o.table?`<div style="font-size:12px;color:var(--text2);margin-bottom:6px">${o.table}${o.note?' | '+o.note:''}</div>`:''}
+      ${(o.table_no||o.table)?`<div style="font-size:12px;color:var(--text2);margin-bottom:6px">${o.table}${o.note?' | '+o.note:''}</div>`:''}
       <div class="oc-footer">
         <span class="oc-total">${o.total.toFixed(1)}</span>
         <button class="btn-primary" style="padding:6px 16px;border:none;border-radius:6px;font-size:12px;cursor:pointer" onclick="completeOrder(${o.id})">标记完成</button>
@@ -830,7 +871,7 @@ function renderAdminOrders(){
         <span class="oc-time">${o.time}</span>
       </div>
       <div class="oc-items">${items}</div>
-      ${o.table?`<div style="font-size:12px;color:var(--text2);margin-bottom:6px">${o.table}${o.note?' | '+o.note:''}</div>`:''}
+      ${(o.table_no||o.table)?`<div style="font-size:12px;color:var(--text2);margin-bottom:6px">${o.table}${o.note?' | '+o.note:''}</div>`:''}
       <div class="oc-footer">
         <span class="oc-total">${o.total.toFixed(1)}</span>
         ${o.status==='active'?`<button class="btn-primary" style="padding:6px 16px;border:none;border-radius:6px;font-size:12px;cursor:pointer" onclick="completeOrder(${o.id})">标记完成</button>`:
@@ -947,10 +988,7 @@ if('serviceWorker' in navigator){
 }
 
 // ============== INIT ==============
-updateCartBadge();
-renderMenu();
-renderCart();
-renderOrders();
+initData();
 </script>
 </body>
 </html>
