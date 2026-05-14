@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<meta name="theme-color" content="#d4312c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.svg">
+<title>点菜系统</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{--primary:#d4312c;--primary-dark:#b52824;--primary-light:#fff1f0;--bg:#f5f5f5;--card:#fff;--text:#1f2937;--text2:#6b7280;--text3:#9ca3af;--border:#e5e7eb;--success:#10b981;--warn:#f59e0b;--radius:12px;--shadow:0 1px 3px rgba(0,0,0,.08)}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;overflow:hidden;height:100dvh}
+#app{display:flex;flex-direction:column;height:100dvh;max-width:480px;margin:0 auto;position:relative;background:var(--bg)}
+/* Header */
+.header{display:flex;align-items:center;padding:12px 16px;background:var(--card);border-bottom:1px solid var(--border);flex-shrink:0;gap:8px}
+.header h1{font-size:18px;font-weight:600;flex-shrink:0}
+.header .search-box{flex:1;position:relative}
+.header .search-box input{width:100%;padding:8px 12px 8px 32px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg);outline:none}
+.header .search-box input:focus{border-color:var(--primary)}
+.header .search-box .search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:14px}
+/* Pages */
+.pages{flex:1;overflow:hidden;position:relative}
+.page{display:none;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 16px 80px}
+.page.active{display:block}
+/* Bottom Nav */
+.bottom-nav{display:flex;background:var(--card);border-top:1px solid var(--border);flex-shrink:0;position:sticky;bottom:0}
+.bottom-nav a{flex:1;display:flex;flex-direction:column;align-items:center;padding:6px 0 8px;font-size:11px;color:var(--text3);text-decoration:none;cursor:pointer;position:relative;transition:color .15s}
+.bottom-nav a .nav-icon{font-size:22px;line-height:1.2}
+.bottom-nav a.active{color:var(--primary)}
+.bottom-nav a .badge{position:absolute;top:2px;right:50%;margin-right:-24px;background:var(--primary);color:#fff;font-size:10px;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 4px;font-weight:600;display:none}
+.bottom-nav a .badge.show{display:flex}
+/* Category Chips */
+.category-bar{display:flex;gap:8px;overflow-x:auto;padding:8px 0 12px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.category-bar::-webkit-scrollbar{display:none}
+.category-bar .chip{padding:6px 16px;border-radius:16px;background:var(--card);border:1px solid var(--border);font-size:13px;white-space:nowrap;cursor:pointer;transition:all .15s;flex-shrink:0}
+.category-bar .chip.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+/* Dish Grid */
+.dish-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.dish-card{background:var(--card);border-radius:var(--radius);overflow:hidden;cursor:pointer;box-shadow:var(--shadow);transition:transform .15s}
+.dish-card:active{transform:scale(.97)}
+.dish-card .dish-img{width:100%;aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:36px;color:#fff;font-weight:600;position:relative}
+.dish-card .dish-img .unavailable-badge{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.5);color:#fff;font-size:10px;padding:2px 6px;border-radius:4px}
+.dish-card .dish-info{padding:10px 12px 12px}
+.dish-card .dish-name{font-size:14px;font-weight:500;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dish-card .dish-meta{display:flex;align-items:center;justify-content:space-between}
+.dish-card .dish-price{font-size:16px;font-weight:700;color:var(--primary)}
+.dish-card .dish-price::before{content:'¥';font-size:12px}
+.dish-card .dish-tag{padding:2px 8px;border-radius:4px;background:var(--primary-light);color:var(--primary);font-size:11px}
+.dish-card.unavailable .dish-price,.dish-card.unavailable .dish-name{color:var(--text3)}
+/* Cart Page */
+.cart-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;color:var(--text3)}
+.cart-empty .empty-icon{font-size:64px;margin-bottom:16px;opacity:.4}
+.cart-empty p{font-size:16px;margin-bottom:20px}
+.cart-empty .btn{background:var(--primary);color:#fff;border:none;padding:10px 32px;border-radius:8px;font-size:15px;cursor:pointer}
+.cart-list{list-style:none;padding:0}
+.cart-item{display:flex;align-items:center;padding:14px 0;border-bottom:1px solid var(--border);gap:12px}
+.cart-item .ci-name{flex:1;font-size:15px;font-weight:500}
+.cart-item .ci-price{font-size:14px;color:var(--text2);width:60px;text-align:right}
+.cart-item .ci-qty{display:flex;align-items:center;gap:6px}
+.cart-item .ci-qty button{width:28px;height:28px;border-radius:50%;border:1px solid var(--border);background:var(--card);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text)}
+.cart-item .ci-qty button:active{background:var(--bg)}
+.cart-item .ci-qty span{min-width:24px;text-align:center;font-size:15px;font-weight:500}
+.cart-footer{position:sticky;bottom:0;background:var(--card);padding:16px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;margin:0 -16px}
+.cart-footer .cf-total{font-size:16px}
+.cart-footer .cf-total strong{font-size:22px;color:var(--primary);margin-left:4px}
+.cart-footer .cf-total strong::before{content:'¥';font-size:16px}
+.cart-footer .btn-order{background:var(--primary);color:#fff;border:none;padding:12px 28px;border-radius:8px;font-size:15px;font-weight:500;cursor:pointer}
+.cart-footer .btn-order:disabled{background:var(--text3);cursor:not-allowed}
+/* Orders */
+.order-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;color:var(--text3)}
+.order-empty .empty-icon{font-size:64px;margin-bottom:16px;opacity:.4}
+.order-empty p{font-size:16px}
+.order-tabs{display:flex;gap:0;margin-bottom:12px;background:var(--card);border-radius:8px;overflow:hidden;border:1px solid var(--border)}
+.order-tabs .tab{flex:1;text-align:center;padding:8px 0;font-size:13px;cursor:pointer;color:var(--text2);transition:all .15s}
+.order-tabs .tab.active{background:var(--primary);color:#fff}
+.order-card{background:var(--card);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;box-shadow:var(--shadow)}
+.order-card .oc-header{display:flex;justify-content:space-between;margin-bottom:8px;font-size:13px}
+.order-card .oc-header .oc-id{font-weight:600}
+.order-card .oc-header .oc-time{color:var(--text2)}
+.order-card .oc-items{font-size:13px;color:var(--text2);margin-bottom:6px;line-height:1.6}
+.order-card .oc-footer{display:flex;justify-content:space-between;align-items:center;padding-top:8px;border-top:1px solid var(--border)}
+.order-card .oc-footer .oc-total{font-size:15px;font-weight:600}
+.order-card .oc-footer .oc-total::before{content:'总计: ¥'}
+.order-card .oc-footer .oc-status{padding:4px 12px;border-radius:12px;font-size:12px;font-weight:500}
+.order-card .oc-footer .oc-status.active{background:#fff1f0;color:var(--primary)}
+.order-card .oc-footer .oc-status.done{background:#ecfdf5;color:var(--success)}
+.order-card .oc-footer .oc-note{font-size:12px;color:var(--text3)}
+/* Admin */
+.admin-tabs{display:flex;gap:0;margin-bottom:16px;background:var(--card);border-radius:8px;overflow:hidden;border:1px solid var(--border)}
+.admin-tabs .tab{flex:1;text-align:center;padding:8px 0;font-size:13px;cursor:pointer;color:var(--text2);transition:all .15s}
+.admin-tabs .tab.active{background:var(--primary);color:#fff}
+.admin-section{display:none}
+.admin-section.active{display:block}
+.admin-form{background:var(--card);border-radius:var(--radius);padding:16px;margin-bottom:16px;box-shadow:var(--shadow)}
+.admin-form h3{font-size:15px;margin-bottom:12px;font-weight:600}
+.admin-form .af-row{margin-bottom:12px}
+.admin-form .af-row label{display:block;font-size:12px;color:var(--text2);margin-bottom:4px}
+.admin-form .af-row input,.admin-form .af-row select,.admin-form .af-row textarea{width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;outline:none;font-family:inherit}
+.admin-form .af-row textarea{resize:vertical;min-height:60px}
+.admin-form .af-row input:focus,.admin-form .af-row select:focus{border-color:var(--primary)}
+.admin-form .af-row .toggle-wrap{display:flex;align-items:center;gap:8px;padding:4px 0}
+.admin-form .af-row .toggle{width:40px;height:22px;background:var(--border);border-radius:11px;position:relative;cursor:pointer;transition:background .2s}
+.admin-form .af-row .toggle.on{background:var(--primary)}
+.admin-form .af-row .toggle::after{content:'';width:18px;height:18px;border-radius:50%;background:#fff;position:absolute;top:2px;left:2px;transition:transform .2s;box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.admin-form .af-row .toggle.on::after{transform:translateX(18px)}
+.admin-form .af-row .toggle-label{font-size:14px;color:var(--text)}
+.btn-row{display:flex;gap:8px}
+.btn-row .btn{flex:1;padding:10px;border-radius:8px;border:none;font-size:14px;cursor:pointer;font-weight:500}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-secondary{background:var(--bg);color:var(--text)}
+.btn-danger{background:#fee2e2;color:#dc2626}
+.dish-list .dl-item{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--card);border-radius:8px;margin-bottom:6px;box-shadow:var(--shadow)}
+.dish-list .dl-item .dl-info{flex:1;min-width:0}
+.dish-list .dl-item .dl-info .dl-name{font-size:14px;font-weight:500}
+.dish-list .dl-item .dl-info .dl-meta{font-size:12px;color:var(--text2)}
+.dish-list .dl-item .dl-actions{display:flex;gap:8px;flex-shrink:0}
+.dish-list .dl-item .dl-actions button{width:32px;height:32px;border-radius:6px;border:none;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center}
+/* Image picker */
+.img-picker{display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px;border:2px dashed var(--border);border-radius:10px;cursor:pointer;transition:border-color .2s;position:relative}
+.img-picker:active{border-color:var(--primary)}
+.img-picker .ip-preview{width:100%;max-height:160px;object-fit:cover;border-radius:6px;display:none}
+.img-picker .ip-placeholder{display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--text3);font-size:13px;padding:12px 0}
+.img-picker .ip-placeholder .ip-icon{font-size:32px}
+.img-picker.has-img .ip-placeholder{display:none}
+.img-picker.has-img .ip-preview{display:block}
+.img-picker .ip-remove{position:absolute;top:4px;right:4px;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.5);color:#fff;border:none;font-size:14px;cursor:pointer;display:none;align-items:center;justify-content:center}
+.img-picker.has-img:hover .ip-remove{display:flex}
+.img-picker .ip-url-toggle{font-size:12px;color:var(--primary);cursor:pointer;margin-top:4px}
+.img-picker .ip-url-row{width:100%;display:none;margin-top:4px}
+.img-picker .ip-url-row input{width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;outline:none}
+.img-picker .ip-url-row.show{display:block}
+.dish-list .dl-item .dl-actions .dl-edit{background:var(--primary-light);color:var(--primary)}
+.dish-list .dl-item .dl-actions .dl-del{background:#fee2e2;color:#dc2626}
+/* Category management */
+.cat-list{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.cat-list .cat-tag{display:flex;align-items:center;gap:4px;padding:6px 12px;border-radius:16px;background:var(--card);border:1px solid var(--border);font-size:13px}
+.cat-list .cat-tag .cat-del{width:18px;height:18px;border-radius:50%;border:none;background:var(--border);cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;color:var(--text2)}
+.cat-add-row{display:flex;gap:8px;align-items:center}
+.cat-add-row input{flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;outline:none}
+.cat-add-row input:focus{border-color:var(--primary)}
+.cat-add-row button{padding:8px 16px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer}
+/* Bottom Sheet */
+.sheet-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:100;opacity:0;visibility:hidden;transition:all .25s}
+.sheet-overlay.show{opacity:1;visibility:visible}
+.sheet{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-radius:16px 16px 0 0;z-index:101;transform:translateY(100%);transition:transform .3s cubic-bezier(.32,.72,0,1);max-width:480px;margin:0 auto;max-height:85dvh;overflow-y:auto}
+.sheet.show{transform:translateY(0)}
+.sheet .sheet-handle{width:36px;height:4px;border-radius:2px;background:var(--border);margin:12px auto 8px}
+.sheet .sheet-body{padding:8px 20px 24px}
+.sheet .sheet-dish-img{width:100%;aspect-ratio:2/1;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:48px;color:#fff;font-weight:600;margin-bottom:16px}
+.sheet .sheet-name{font-size:22px;font-weight:600;margin-bottom:4px}
+.sheet .sheet-price{font-size:24px;font-weight:700;color:var(--primary);margin-bottom:8px}
+.sheet .sheet-price::before{content:'¥';font-size:18px}
+.sheet .sheet-cat{font-size:13px;color:var(--text2);margin-bottom:8px}
+.sheet .sheet-desc{font-size:14px;color:var(--text2);margin-bottom:20px;line-height:1.6}
+.sheet .sheet-qty{display:flex;align-items:center;justify-content:space-between;padding:16px 0;border-top:1px solid var(--border)}
+.sheet .sheet-qty .sq-label{font-size:16px;font-weight:500}
+.sheet .sheet-qty .sq-controls{display:flex;align-items:center;gap:12px}
+.sheet .sheet-qty .sq-controls button{width:36px;height:36px;border-radius:50%;border:1px solid var(--border);background:var(--card);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text)}
+.sheet .sheet-qty .sq-controls button:active{background:var(--bg)}
+.sheet .sheet-qty .sq-controls .sq-num{min-width:32px;text-align:center;font-size:18px;font-weight:600}
+.sheet .btn-add-cart{width:100%;padding:14px;background:var(--primary);color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:500;cursor:pointer;margin-top:8px}
+.sheet .btn-add-cart:active{background:var(--primary-dark)}
+/* Confirm Dialog */
+.dialog-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:200;display:flex;align-items:center;justify-content:center;opacity:0;visibility:hidden;transition:all .2s}
+.dialog-overlay.show{opacity:1;visibility:visible}
+.dialog{background:var(--card);border-radius:var(--radius);padding:24px;max-width:320px;width:90%;text-align:center}
+.dialog .dialog-title{font-size:17px;font-weight:600;margin-bottom:8px}
+.dialog .dialog-msg{font-size:14px;color:var(--text2);margin-bottom:20px}
+.dialog .dialog-actions{display:flex;gap:8px}
+.dialog .dialog-actions button{flex:1;padding:10px;border-radius:8px;border:none;font-size:14px;cursor:pointer;font-weight:500}
+.dialog .dialog-actions .btn-cancel{background:var(--bg);color:var(--text)}
+.dialog .dialog-actions .btn-confirm{background:var(--primary);color:#fff}
+/* Order dialog */
+.order-dialog .od-row{margin-bottom:12px;text-align:left}
+.order-dialog .od-row label{display:block;font-size:13px;color:var(--text2);margin-bottom:4px}
+.order-dialog .od-row input,.order-dialog .od-row textarea{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;outline:none;font-family:inherit}
+.order-dialog .od-row textarea{resize:none;min-height:50px}
+.order-dialog .od-summary{text-align:left;padding:12px 0;border-top:1px solid var(--border);margin-bottom:8px}
+.order-dialog .od-summary .od-s-item{font-size:14px;color:var(--text);margin-bottom:2px}
+.order-dialog .od-summary .od-s-total{font-size:16px;font-weight:600;color:var(--primary);margin-top:6px}
+/* Toast */
+.toast-container{position:fixed;top:60px;left:50%;transform:translateX(-50%);z-index:300;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;max-width:480px;width:90%}
+.toast{background:#1f2937;color:#fff;padding:10px 20px;border-radius:8px;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,.15);animation:toast-in .25s ease-out;max-width:100%}
+@keyframes toast-in{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:translateY(0)}}
+/* Empty states */
+.empty-state{padding:60px 20px;text-align:center;color:var(--text3)}
+.empty-state .empty-icon{font-size:56px;margin-bottom:12px;opacity:.3}
+.empty-state p{font-size:15px}
+/* Misc */
+.hidden{display:none!important}
+.text-center{text-align:center}
+.mt-8{margin-top:8px}
+.mb-8{margin-bottom:8px}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Header -->
+  <div class="header">
+    <h1 id="pageTitle">菜单</h1>
+    <div class="search-box" id="searchBox">
+      <span class="search-icon">&#128269;</span>
+      <input type="search" id="searchInput" placeholder="搜索菜品..." autocomplete="off">
+    </div>
+  </div>
+
+  <!-- Pages -->
+  <div class="pages">
+    <!-- Menu Page -->
+    <div class="page active" id="page-menu">
+      <div class="category-bar" id="categoryBar"></div>
+      <div class="dish-grid" id="dishGrid"></div>
+      <div class="empty-state hidden" id="menuEmpty">
+        <div class="empty-icon">&#127869;</div>
+        <p id="menuEmptyText">暂无菜品</p>
+      </div>
+    </div>
+
+    <!-- Cart Page -->
+    <div class="page" id="page-cart">
+      <div class="cart-empty" id="cartEmpty">
+        <div class="empty-icon">&#128722;</div>
+        <p>购物车是空的</p>
+        <button class="btn" onclick="navigate('menu')">去点菜</button>
+      </div>
+      <ul class="cart-list hidden" id="cartList"></ul>
+      <div class="cart-footer hidden" id="cartFooter">
+        <div class="cf-total">合计: <strong id="cartTotal">0</strong></div>
+        <button class="btn-order" id="btnPlaceOrder" onclick="showOrderDialog()">去下单</button>
+      </div>
+    </div>
+
+    <!-- Orders Page -->
+    <div class="page" id="page-orders">
+      <div class="order-tabs">
+        <div class="tab active" data-otab="active" onclick="switchOrderTab('active')">进行中</div>
+        <div class="tab" data-otab="done" onclick="switchOrderTab('done')">已完成</div>
+      </div>
+      <div id="orderList"></div>
+    </div>
+
+    <!-- Admin Page -->
+    <div class="page" id="page-admin">
+      <div class="admin-tabs">
+        <div class="tab active" data-atab="dishes" onclick="switchAdminTab('dishes')">菜品</div>
+        <div class="tab" data-atab="categories" onclick="switchAdminTab('categories')">分类</div>
+        <div class="tab" data-atab="orders" onclick="switchAdminTab('orders')">订单管理</div>
+      </div>
+
+      <!-- Dishes Admin -->
+      <div class="admin-section active" id="admin-dishes">
+        <div class="admin-form" id="dishForm">
+          <h3 id="dishFormTitle">添加菜品</h3>
+          <div class="af-row">
+            <label>菜名 *</label>
+            <input type="text" id="dfName" placeholder="例: 宫保鸡丁">
+          </div>
+          <div class="af-row">
+            <label>价格 *</label>
+            <input type="number" id="dfPrice" placeholder="例: 28" min="0" step="0.5">
+          </div>
+          <div class="af-row">
+            <label>分类 *</label>
+            <select id="dfCategory"></select>
+          </div>
+          <div class="af-row">
+            <label>描述（可选）</label>
+            <textarea id="dfDesc" placeholder="菜品介绍..." rows="2"></textarea>
+          </div>
+          <div class="af-row">
+            <label>图片</label>
+            <div class="img-picker" id="imgPicker" onclick="document.getElementById('imgFileInput').click()">
+              <input type="file" id="imgFileInput" accept="image/*" style="display:none" onchange="handleImagePick(event)">
+              <img class="ip-preview" id="imgPreview" alt="">
+              <div class="ip-placeholder">
+                <span class="ip-icon">&#128247;</span>
+                <span>点击选择图片</span>
+                <span style="font-size:11px;color:var(--text3)">建议使用 400x400 以内的小图</span>
+              </div>
+              <button class="ip-remove" id="imgRemoveBtn" onclick="event.stopPropagation();removeDishImage()">&#10005;</button>
+              <span class="ip-url-toggle" onclick="event.stopPropagation();document.getElementById('ipUrlRow').classList.toggle('show');document.getElementById('ipUrlRow').querySelector('input').focus()">或输入图片链接</span>
+              <div class="ip-url-row" id="ipUrlRow">
+                <input type="url" id="dfImageUrl" placeholder="https://..." oninput="previewUrlImage(this.value)">
+              </div>
+            </div>
+          </div>
+          <div class="af-row">
+            <div class="toggle-wrap">
+              <div class="toggle on" id="dfAvailable" onclick="this.classList.toggle('on')"></div>
+              <span class="toggle-label">上架中</span>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-secondary" id="btnFormCancel" onclick="cancelDishEdit()">取消</button>
+            <button class="btn btn-primary" onclick="saveDish()">保存</button>
+          </div>
+        </div>
+        <div class="dish-list" id="dishList"></div>
+      </div>
+
+      <!-- Categories Admin -->
+      <div class="admin-section" id="admin-categories">
+        <div class="cat-list" id="catList"></div>
+        <div class="cat-add-row">
+          <input type="text" id="catInput" placeholder="新分类名称" onkeydown="if(event.key==='Enter')addCategory()">
+          <button onclick="addCategory()">添加</button>
+        </div>
+      </div>
+
+      <!-- Orders Admin -->
+      <div class="admin-section" id="admin-orders">
+        <div id="adminOrderList">
+          <div class="empty-state"><div class="empty-icon">&#128196;</div><p>暂无订单</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Nav -->
+  <nav class="bottom-nav">
+    <a class="active" data-page="menu" onclick="navigate('menu')">
+      <span class="nav-icon">&#127860;</span>
+      菜单
+    </a>
+    <a data-page="cart" onclick="navigate('cart')">
+      <span class="nav-icon">&#128722;</span>
+      购物车
+      <span class="badge" id="cartBadge">0</span>
+    </a>
+    <a data-page="orders" onclick="navigate('orders')">
+      <span class="nav-icon">&#128203;</span>
+      订单
+    </a>
+    <a data-page="admin" onclick="navigate('admin')">
+      <span class="nav-icon">&#9881;</span>
+      管理
+    </a>
+  </nav>
+</div>
+
+<!-- Bottom Sheet -->
+<div class="sheet-overlay" id="sheetOverlay" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-body">
+    <div class="sheet-dish-img" id="sheetImg">菜</div>
+    <div class="sheet-name" id="sheetName"></div>
+    <div class="sheet-price" id="sheetPrice"></div>
+    <div class="sheet-cat" id="sheetCat"></div>
+    <div class="sheet-desc" id="sheetDesc"></div>
+    <div class="sheet-qty">
+      <span class="sq-label">数量</span>
+      <div class="sq-controls">
+        <button onclick="sheetQty(-1)">-</button>
+        <span class="sq-num" id="sheetQty">1</span>
+        <button onclick="sheetQty(1)">+</button>
+      </div>
+    </div>
+    <button class="btn-add-cart" id="btnAddCart" onclick="addFromSheet()">加入购物车</button>
+  </div>
+</div>
+
+<!-- Confirm Dialog -->
+<div class="dialog-overlay" id="dialogOverlay">
+  <div class="dialog">
+    <div class="dialog-title" id="dialogTitle">确认</div>
+    <div class="dialog-msg" id="dialogMsg">确定要执行此操作吗？</div>
+    <div class="dialog-actions">
+      <button class="btn-cancel" onclick="closeDialog()">取消</button>
+      <button class="btn-confirm" id="dialogConfirmBtn" onclick="closeDialog()">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- Order Dialog -->
+<div class="dialog-overlay" id="orderDialogOverlay">
+  <div class="dialog order-dialog">
+    <div class="dialog-title">确认订单</div>
+    <div class="od-row">
+      <label>桌号/人数（可选）</label>
+      <input type="text" id="odTable" placeholder="例: 3号桌 / 2人">
+    </div>
+    <div class="od-row">
+      <label>备注（可选）</label>
+      <textarea id="odNote" placeholder="口味要求..."></textarea>
+    </div>
+    <div class="od-summary" id="odSummary"></div>
+    <div class="dialog-actions">
+      <button class="btn-cancel" onclick="closeOrderDialog()">取消</button>
+      <button class="btn-confirm" onclick="confirmOrder()">确认下单</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ============== DATA ==============
+const SK = 'order-app-data';
+const defaults = () => ({
+  categories: ['热销','冷菜','热菜','素菜','炸物','主食','饮品','汤类','水果'],
+  dishes: [
+    {id:1,name:'宫保鸡丁',price:28,category:'热菜',desc:'经典川菜，鸡肉与花生爆炒',image:'',available:true},
+    {id:2,name:'麻婆豆腐',price:18,category:'热菜',desc:'麻辣鲜香的嫩豆腐',image:'',available:true},
+    {id:3,name:'回锅肉',price:32,category:'热菜',desc:'五花肉配蒜苗豆瓣酱',image:'',available:true},
+    {id:4,name:'鱼香肉丝',price:26,category:'热菜',desc:'酸甜微辣，下饭神器',image:'',available:true},
+    {id:5,name:'凉拌黄瓜',price:12,category:'冷菜',desc:'清爽开胃',image:'',available:true},
+    {id:6,name:'皮蛋豆腐',price:15,category:'冷菜',desc:'冰镇嫩豆腐配松花蛋',image:'',available:true},
+    {id:7,name:'白米饭',price:3,category:'主食',desc:'',image:'',available:true},
+    {id:8,name:'蛋炒饭',price:12,category:'主食',desc:'',image:'',available:true},
+    {id:9,name:'可口可乐',price:5,category:'饮品',desc:'冰镇',image:'',available:true},
+    {id:10,name:'雪碧',price:5,category:'饮品',desc:'冰镇',image:'',available:true},
+    {id:11,name:'紫菜蛋花汤',price:10,category:'汤类',desc:'',image:'',available:true},
+    {id:12,name:'番茄蛋汤',price:12,category:'汤类',desc:'',image:'',available:true}
+  ],
+  orders: [],
+  cart: [],
+  nextId: 13,
+  nextOrderId: 1
+});
+
+function loadData(){
+  try{
+    const raw = localStorage.getItem(SK);
+    if(!raw) return saveData(defaults()),defaults();
+    const d = JSON.parse(raw);
+    // merge defaults for missing fields
+    const def = defaults();
+    for(const k of Object.keys(def)){
+      if(!(k in d)) d[k]=def[k];
+      if(k==='categories' && d.categories.length===0) d.categories=def.categories;
+    }
+    return d;
+  }catch(e){return defaults()}
+}
+function saveData(d){d=d||data;try{localStorage.setItem(SK,JSON.stringify(d))}catch(e){showToast('存储空间不足')}}
+
+let data = loadData();
+
+// ============== NAVIGATION ==============
+const pageNames = {menu:'菜单',cart:'购物车',orders:'订单',admin:'管理'};
+function navigate(page){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.bottom-nav a').forEach(a=>a.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  document.querySelector(`.bottom-nav a[data-page="${page}"]`).classList.add('active');
+  document.getElementById('pageTitle').textContent = pageNames[page];
+  document.getElementById('searchBox').style.display = page==='menu'?'block':'none';
+  if(page==='menu') renderMenu();
+  else if(page==='cart') renderCart();
+  else if(page==='orders') renderOrders();
+  else if(page==='admin') renderAdmin();
+}
+
+// ============== CATEGORY ==============
+function getCategories(){return data.categories}
+function addCategory(name){
+  name=name.trim();
+  if(!name) return showToast('请输入分类名称');
+  if(data.categories.includes(name)) return showToast('分类已存在');
+  data.categories.push(name);
+  saveData();renderAdminCategories();populateCategorySelect();
+  document.getElementById('catInput').value='';
+  showToast('分类已添加');
+}
+function removeCategory(name){
+  const used = data.dishes.some(d=>d.category===name);
+  if(used) return showToast('该分类下有菜品，无法删除');
+  data.categories = data.categories.filter(c=>c!==name);
+  saveData();renderAdminCategories();populateCategorySelect();renderMenu();
+  showToast('分类已删除');
+}
+
+// ============== DISH CRUD ==============
+function getDishes(){return data.dishes}
+function getDish(id){return data.dishes.find(d=>d.id===id)}
+function saveDish(){
+  const name = document.getElementById('dfName').value.trim();
+  const price = parseFloat(document.getElementById('dfPrice').value);
+  const category = document.getElementById('dfCategory').value;
+  const desc = document.getElementById('dfDesc').value.trim();
+  const image = document.getElementById('imgPicker').dataset.currentImage||'';
+  const available = document.getElementById('dfAvailable').classList.contains('on');
+  if(!name) return showToast('请输入菜名');
+  if(!price||price<=0) return showToast('请输入有效价格');
+  if(!category) return showToast('请选择分类');
+  const editing = parseInt(document.getElementById('dishForm').dataset.editId);
+  if(editing){
+    const d = getDish(editing);
+    if(d){d.name=name;d.price=price;d.category=category;d.desc=desc;d.image=image;d.available=available}
+  }else{
+    data.dishes.push({id:data.nextId++,name,price,category,desc,image,available});
+  }
+  saveData();cancelDishEdit();renderAdminDishes();renderMenu();
+  showToast(editing?'菜品已更新':'菜品已添加');
+}
+function deleteDish(id){
+  confirm('确定要删除这道菜吗？',()=>{
+    data.dishes = data.dishes.filter(d=>d.id!==id);
+    saveData();renderAdminDishes();renderMenu();
+    showToast('已删除');
+  });
+}
+function editDish(id){
+  const d = getDish(id);
+  if(!d) return;
+  document.getElementById('dishForm').dataset.editId = id;
+  document.getElementById('dishFormTitle').textContent = '编辑菜品';
+  document.getElementById('dfName').value = d.name;
+  document.getElementById('dfPrice').value = d.price;
+  document.getElementById('dfCategory').value = d.category;
+  document.getElementById('dfDesc').value = d.desc;
+  document.getElementById('dfAvailable').className = 'toggle'+(d.available?' on':'');
+  setDishImage(d.image);
+  document.getElementById('dishFormTitle').textContent = '编辑菜品';
+  document.getElementById('btnFormCancel').classList.remove('hidden');
+  document.getElementById('dishForm').scrollIntoView({behavior:'smooth'});
+}
+function cancelDishEdit(){
+  delete document.getElementById('dishForm').dataset.editId;
+  document.getElementById('dishFormTitle').textContent = '添加菜品';
+  document.getElementById('dfName').value='';
+  document.getElementById('dfPrice').value='';
+  document.getElementById('dfDesc').value='';
+  document.getElementById('dfAvailable').className='toggle on';
+  removeDishImage();
+  document.getElementById('btnFormCancel').classList.add('hidden');
+}
+
+// ============== IMAGE PICKER ==============
+function handleImagePick(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  if(file.size>5*1024*1024) return showToast('图片太大，请选择 5MB 以内的');
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    const img = new Image();
+    img.onload = function(){
+      let w=img.width,h=img.height;
+      const max=400;
+      if(w>max||h>max){if(w>h){h=h/w*max;w=max}else{w=w/h*max;h=max}}
+      const c = document.createElement('canvas');
+      c.width=w;c.height=h;
+      const ctx=c.getContext('2d');
+      ctx.drawImage(img,0,0,w,h);
+      const dataUrl = c.toDataURL('image/jpeg',0.8);
+      setDishImage(dataUrl);
+      showToast('图片已添加');
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+  e.target.value='';
+}
+function setDishImage(src){
+  const picker = document.getElementById('imgPicker');
+  const preview = document.getElementById('imgPreview');
+  if(src){
+    preview.src = src;
+    picker.classList.add('has-img');
+    picker.dataset.currentImage = src;
+  }else{
+    removeDishImage();
+  }
+}
+function removeDishImage(){
+  const picker = document.getElementById('imgPicker');
+  const preview = document.getElementById('imgPreview');
+  picker.classList.remove('has-img');
+  preview.src='';
+  delete picker.dataset.currentImage;
+  document.getElementById('dfImageUrl').value='';
+  document.getElementById('ipUrlRow').classList.remove('show');
+}
+function previewUrlImage(url){
+  if(url&&url.startsWith('http')){
+    const picker = document.getElementById('imgPicker');
+    const preview = document.getElementById('imgPreview');
+    preview.src=url;
+    picker.classList.add('has-img');
+    picker.dataset.currentImage=url;
+  }
+}
+
+// ============== CART ==============
+function getCart(){return data.cart}
+function addToCart(dishId,qty){
+  qty=qty||1;
+  const d = getDish(dishId);
+  if(!d||!d.available) return showToast('该菜品已下架');
+  const item = data.cart.find(c=>c.dishId===dishId);
+  if(item) item.qty+=qty;
+  else data.cart.push({dishId,qty});
+  saveData();updateCartBadge();renderCart();showToast(`已加入购物车`);
+}
+function updateCartQty(dishId,delta){
+  const item = data.cart.find(c=>c.dishId===dishId);
+  if(!item) return;
+  item.qty+=delta;
+  if(item.qty<=0) data.cart = data.cart.filter(c=>c.dishId!==dishId);
+  saveData();updateCartBadge();renderCart();
+}
+function clearCart(){data.cart=[];saveData();updateCartBadge();renderCart()}
+function getCartCount(){return data.cart.reduce((s,c)=>s+c.qty,0)}
+function getCartTotal(){return data.cart.reduce((s,c)=>{const d=getDish(c.dishId);return s+(d?d.price*c.qty:0)},0)}
+function updateCartBadge(){
+  const n = getCartCount();
+  const badge = document.getElementById('cartBadge');
+  if(n>0){badge.textContent=n;badge.classList.add('show')}else badge.classList.remove('show');
+}
+
+// ============== ORDERS ==============
+function placeOrder(table,note){
+  const items = data.cart.map(c=>{
+    const d=getDish(c.dishId);
+    return {dishId:c.dishId,name:d?d.name:'已删除',price:d?d.price:0,qty:c.qty};
+  });
+  const total = items.reduce((s,i)=>s+i.price*i.qty,0);
+  const order = {
+    id:data.nextOrderId++,
+    items,
+    total,
+    table:table||'',
+    note:note||'',
+    status:'active',
+    time:new Date().toLocaleString('zh-CN')
+  };
+  data.orders.unshift(order);
+  data.cart = [];
+  saveData();updateCartBadge();renderCart();renderOrders();renderAdminOrders();
+  navigate('orders');
+  showToast('下单成功！');
+}
+function completeOrder(id){
+  const o = data.orders.find(o=>o.id===id);
+  if(o){o.status='done';saveData();renderOrders();renderAdminOrders();showToast('订单已完成')}
+}
+
+// ============== RENDER: MENU ==============
+let menuCategory = 'all';
+function renderMenu(){
+  const bar = document.getElementById('categoryBar');
+  const grid = document.getElementById('dishGrid');
+  const empty = document.getElementById('menuEmpty');
+  const search = document.getElementById('searchInput').value.trim().toLowerCase();
+  let dishes = data.dishes;
+  if(search){
+    dishes = dishes.filter(d=>d.name.toLowerCase().includes(search));
+    document.getElementById('menuEmptyText').textContent='未找到相关菜品';
+  }else{
+    document.getElementById('menuEmptyText').textContent='暂无菜品';
+  }
+  // categories bar
+  let chips = `<div class="chip ${menuCategory==='all'?'active':''}" onclick="setMenuCat('all')">全部</div>`;
+  data.categories.forEach(c=>{
+    chips += `<div class="chip ${menuCategory===c?'active':''}" onclick="setMenuCat('${c}')">${c}</div>`;
+  });
+  bar.innerHTML = chips;
+  // filter
+  if(menuCategory!=='all'&&!search) dishes = dishes.filter(d=>d.category===menuCategory);
+  if(!dishes.length){grid.innerHTML='';empty.classList.remove('hidden');empty.style.display='flex';return}
+  empty.style.display='none';
+  grid.innerHTML = dishes.map(d=>{
+    const initial = d.name.charAt(0);
+    const color = stringToColor(d.name);
+    const imgStyle = d.image ? `background-image:url('${d.image}');background-size:cover;background-position:center` :
+      `background:${color}`;
+    return `<div class="dish-card ${d.available?'':'unavailable'}" onclick="openSheet(${d.id})">
+      <div class="dish-img" style="${imgStyle}">${d.image?'':initial}${d.available?'':`<span class="unavailable-badge">已下架</span>`}</div>
+      <div class="dish-info">
+        <div class="dish-name">${d.name}</div>
+        <div class="dish-meta">
+          <span class="dish-price">${d.price}</span>
+          <span class="dish-tag">${d.category}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function setMenuCat(cat){menuCategory=cat;renderMenu()}
+
+// ============== RENDER: CART ==============
+function renderCart(){
+  const empty = document.getElementById('cartEmpty');
+  const list = document.getElementById('cartList');
+  const footer = document.getElementById('cartFooter');
+  if(!data.cart.length){
+    empty.style.display='flex';list.classList.add('hidden');footer.classList.add('hidden');return;
+  }
+  empty.style.display='none';list.classList.remove('hidden');footer.classList.remove('hidden');
+  list.innerHTML = data.cart.map(c=>{
+    const d = getDish(c.dishId);
+    const name = d?d.name:'已下架';
+    const price = d?d.price:0;
+    return `<li class="cart-item">
+      <span class="ci-name">${name}</span>
+      <span class="ci-price">¥${(price*c.qty).toFixed(1)}</span>
+      <div class="ci-qty">
+        <button onclick="updateCartQty(${c.dishId},-1)">-</button>
+        <span>${c.qty}</span>
+        <button onclick="updateCartQty(${c.dishId},1)">+</button>
+      </div>
+    </li>`;
+  }).join('');
+  document.getElementById('cartTotal').textContent = getCartTotal().toFixed(1);
+}
+
+// ============== RENDER: ORDERS ==============
+let orderTab = 'active';
+function switchOrderTab(tab){
+  orderTab=tab;
+  document.querySelectorAll('.order-tabs .tab').forEach(t=>t.classList.toggle('active',t.dataset.otab===tab));
+  renderOrders();
+}
+function renderOrders(){
+  const el = document.getElementById('orderList');
+  const orders = data.orders.filter(o=>o.status===orderTab);
+  if(!orders.length){
+    el.innerHTML = `<div class="order-empty"><div class="empty-icon">&#128203;</div><p>${orderTab==='active'?'没有进行中的订单':'还没有完成的订单'}</p></div>`;
+    return;
+  }
+  // Sales stats for completed tab
+  if(orderTab==='done'){
+    const sales = {};
+    data.orders.filter(o=>o.status==='done').forEach(o=>{
+      o.items.forEach(i=>{sales[i.name]=(sales[i.name]||0)+i.qty});
+    });
+    const top = Object.entries(sales).sort((a,b)=>b[1]-a[1]);
+    const statsHtml = `<div style="background:var(--card);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px;box-shadow:var(--shadow)">
+      <div style="font-size:14px;font-weight:600;margin-bottom:8px">菜品销量统计</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;font-size:13px">
+        ${top.map(([name,qty],i)=>`<div style="display:flex;justify-content:space-between;padding:2px 0"><span>${i+1}. ${name}</span><span style="color:var(--primary);font-weight:600">${qty}</span></div>`).join('')}
+      </div>
+    </div>`;
+    el.innerHTML = statsHtml + orders.map(o=>{
+      const items = o.items.map(i=>`${i.name} x${i.qty}`).join('、');
+      return `<div class="order-card">
+        <div class="oc-header">
+          <span class="oc-id">#${String(o.id).padStart(3,'0')}</span>
+          <span class="oc-time">${o.time}</span>
+        </div>
+        <div class="oc-items">${items}</div>
+        ${o.table?`<div style="font-size:12px;color:var(--text2);margin-bottom:6px">${o.table}${o.note?' | '+o.note:''}</div>`:''}
+        <div class="oc-footer">
+          <span class="oc-total">${o.total.toFixed(1)}</span>
+          <span class="oc-status done">已完成</span>
+        </div>
+      </div>`;
+    }).join('');
+    return;
+  }
+  // Active orders
+  el.innerHTML = orders.map(o=>{
+    const items = o.items.map(i=>`${i.name} x${i.qty}`).join('、');
+    return `<div class="order-card">
+      <div class="oc-header">
+        <span class="oc-id">#${String(o.id).padStart(3,'0')}</span>
+        <span class="oc-time">${o.time}</span>
+      </div>
+      <div class="oc-items">${items}</div>
+      ${o.table?`<div style="font-size:12px;color:var(--text2);margin-bottom:6px">${o.table}${o.note?' | '+o.note:''}</div>`:''}
+      <div class="oc-footer">
+        <span class="oc-total">${o.total.toFixed(1)}</span>
+        <button class="btn-primary" style="padding:6px 16px;border:none;border-radius:6px;font-size:12px;cursor:pointer" onclick="completeOrder(${o.id})">标记完成</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ============== RENDER: ADMIN ==============
+let adminTab = 'dishes';
+function switchAdminTab(tab){
+  adminTab=tab;
+  document.querySelectorAll('.admin-tabs .tab').forEach(t=>t.classList.toggle('active',t.dataset.atab===tab));
+  document.querySelectorAll('.admin-section').forEach(s=>s.classList.remove('active'));
+  document.getElementById('admin-'+tab).classList.add('active');
+  if(tab==='dishes') renderAdminDishes();
+  else if(tab==='categories') renderAdminCategories();
+  else if(tab==='orders') renderAdminOrders();
+}
+function renderAdmin(){
+  switchAdminTab(adminTab);
+  populateCategorySelect();
+}
+function populateCategorySelect(){
+  const sel = document.getElementById('dfCategory');
+  sel.innerHTML = data.categories.map(c=>`<option value="${c}">${c}</option>`).join('');
+}
+function renderAdminDishes(){
+  const el = document.getElementById('dishList');
+  if(!data.dishes.length){
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#127869;</div><p>还没有菜品，在上方添加吧</p></div>';
+    return;
+  }
+  el.innerHTML = data.dishes.map(d=>{
+    const avail = d.available?'上架中':'已下架';
+    return `<div class="dl-item">
+      <div class="dl-info">
+        <div class="dl-name">${d.name} <span style="font-size:12px;color:var(--text3)">${avail}</span></div>
+        <div class="dl-meta">¥${d.price} | ${d.category}</div>
+      </div>
+      <div class="dl-actions">
+        <button class="dl-edit" onclick="editDish(${d.id})">&#9998;</button>
+        <button class="dl-del" onclick="deleteDish(${d.id})">&#10005;</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function renderAdminCategories(){
+  const el = document.getElementById('catList');
+  el.innerHTML = data.categories.map(c=>{
+    const used = data.dishes.some(d=>d.category===c);
+    return `<div class="cat-tag">${c} <button class="cat-del" onclick="removeCategory('${c}')" ${used?'title="该分类下有菜品"':''}>${used?'&#128274;':'&#10005;'}</button></div>`;
+  }).join('');
+}
+function renderAdminOrders(){
+  const el = document.getElementById('adminOrderList');
+  if(!data.orders.length){
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#128196;</div><p>暂无订单</p></div>';
+    return;
+  }
+  el.innerHTML = data.orders.map(o=>{
+    const items = o.items.map(i=>`${i.name} x${i.qty}`).join('、');
+    return `<div class="order-card">
+      <div class="oc-header">
+        <span class="oc-id">#${String(o.id).padStart(3,'0')}</span>
+        <span class="oc-time">${o.time}</span>
+      </div>
+      <div class="oc-items">${items}</div>
+      ${o.table?`<div style="font-size:12px;color:var(--text2);margin-bottom:6px">${o.table}${o.note?' | '+o.note:''}</div>`:''}
+      <div class="oc-footer">
+        <span class="oc-total">${o.total.toFixed(1)}</span>
+        ${o.status==='active'?`<button class="btn-primary" style="padding:6px 16px;border:none;border-radius:6px;font-size:12px;cursor:pointer" onclick="completeOrder(${o.id})">标记完成</button>`:
+          `<span class="oc-status done">已完成</span>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ============== BOTTOM SHEET ==============
+let sheetDishId = null;
+function openSheet(id){
+  const d = getDish(id);
+  if(!d) return;
+  sheetDishId = id;
+  const initial = d.name.charAt(0);
+  const color = stringToColor(d.name);
+  const imgStyle = d.image ? `background-image:url('${d.image}');background-size:cover;background-position:center` : `background:${color}`;
+  document.getElementById('sheetImg').style.cssText = imgStyle;
+  document.getElementById('sheetImg').textContent = d.image?'':initial;
+  document.getElementById('sheetName').textContent = d.name;
+  document.getElementById('sheetPrice').textContent = d.price;
+  document.getElementById('sheetCat').textContent = d.category;
+  document.getElementById('sheetDesc').textContent = d.desc||'暂无描述';
+  document.getElementById('sheetQty').textContent = '1';
+  document.getElementById('btnAddCart').textContent = d.available?'加入购物车':'已下架';
+  document.getElementById('btnAddCart').style.opacity = d.available?'1':'.5';
+  document.getElementById('sheetOverlay').classList.add('show');
+  document.getElementById('sheet').classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+function closeSheet(){
+  document.getElementById('sheetOverlay').classList.remove('show');
+  document.getElementById('sheet').classList.remove('show');
+  document.body.style.overflow = '';
+}
+function sheetQty(delta){
+  const el = document.getElementById('sheetQty');
+  let v = parseInt(el.textContent)+delta;
+  if(v<1) v=1;
+  el.textContent = v;
+}
+function addFromSheet(){
+  if(!sheetDishId) return;
+  const d = getDish(sheetDishId);
+  if(!d||!d.available) return showToast('该菜品已下架');
+  const qty = parseInt(document.getElementById('sheetQty').textContent);
+  addToCart(sheetDishId,qty);
+  closeSheet();
+}
+
+// ============== ORDER DIALOG ==============
+function showOrderDialog(){
+  if(!data.cart.length) return showToast('购物车是空的');
+  const el = document.getElementById('odSummary');
+  el.innerHTML = data.cart.map(c=>{
+    const d = getDish(c.dishId);
+    return `<div class="od-s-item">${d?d.name:'已下架'} x${c.qty} = ¥${((d?d.price:0)*c.qty).toFixed(1)}</div>`;
+  }).join('') + `<div class="od-s-total">总计: ¥${getCartTotal().toFixed(1)}</div>`;
+  document.getElementById('odTable').value='';
+  document.getElementById('odNote').value='';
+  document.getElementById('orderDialogOverlay').classList.add('show');
+}
+function closeOrderDialog(){
+  document.getElementById('orderDialogOverlay').classList.remove('show');
+}
+function confirmOrder(){
+  const table = document.getElementById('odTable').value.trim();
+  const note = document.getElementById('odNote').value.trim();
+  closeOrderDialog();
+  placeOrder(table,note);
+}
+
+// ============== DIALOG ==============
+let dialogCallback = null;
+function confirm(msg,onOk){
+  document.getElementById('dialogTitle').textContent = '确认';
+  document.getElementById('dialogMsg').textContent = msg;
+  dialogCallback = onOk;
+  document.getElementById('dialogOverlay').classList.add('show');
+}
+function closeDialog(){
+  document.getElementById('dialogOverlay').classList.remove('show');
+  dialogCallback = null;
+}
+document.getElementById('dialogConfirmBtn').addEventListener('click',()=>{
+  if(dialogCallback){const cb=dialogCallback;closeDialog();cb()}
+});
+
+// ============== TOAST ==============
+function showToast(msg){
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className='toast';t.textContent=msg;
+  c.appendChild(t);
+  setTimeout(()=>{t.style.opacity='0';t.style.transition='opacity .3s';setTimeout(()=>t.remove(),300)},2000);
+}
+
+// ============== SEARCH ==============
+document.getElementById('searchInput').addEventListener('input',()=>{renderMenu()});
+
+// ============== UTILS ==============
+function stringToColor(str){
+  const colors = ['#e74c3c','#e67e22','#f1c40f','#2ecc71','#1abc9c','#3498db','#9b59b6','#e84393','#00b894','#6c5ce7'];
+  let h=0;for(let i=0;i<str.length;i++)h=(h*31+str.charCodeAt(i))|0;
+  return colors[Math.abs(h)%colors.length];
+}
+
+// ============== PWA ==============
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
+
+// ============== INIT ==============
+updateCartBadge();
+renderMenu();
+renderCart();
+renderOrders();
+</script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "name": "点菜系统",
+  "short_name": "点菜",
+  "description": "个人点菜系统",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f8f8f8",
+  "theme_color": "#d4312c",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
